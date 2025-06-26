@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seguimiento de Pendientes - Construcción</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="bg-primary text-white py-3 mb-4">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="h3 mb-0">
+                        <i class="fas fa-hard-hat me-2"></i>
+                        Seguimiento de Pendientes de Construcción
+                    </h1>
+                </div>
+                <div class="col-md-4 text-md-end">
+                    <div class="d-flex justify-content-md-end align-items-center">
+                        <div class="badge bg-light text-dark fs-6 me-2">
+                            <i class="fas fa-tasks me-1"></i>
+                            Total: <span id="totalCount">0</span>
+                        </div>
+                        <div class="badge bg-warning text-dark fs-6">
+                            <i class="fas fa-exclamation-triangle me-1"></i>
+                            Abiertos: <span id="openCount">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Loading indicator -->
+    <div id="loadingIndicator" class="container-fluid text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+        <p class="mt-2">Cargando pendientes...</p>
+    </div>
+
+    <!-- Main application -->
+    <div id="mainApp" class="container-fluid" style="display: none;">
+        <!-- Status message -->
+        <div id="statusMessage" class="alert alert-success alert-dismissible fade show" role="alert" style="display: none;">
+            <i class="fas fa-check-circle me-2"></i>
+            <span id="statusText"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="pendientes-tab" data-bs-toggle="tab" data-bs-target="#pendientes" type="button" role="tab">
+                    <i class="fas fa-list me-2"></i>Pendientes
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="estadisticas-tab" data-bs-toggle="tab" data-bs-target="#estadisticas" type="button" role="tab">
+                    <i class="fas fa-chart-bar me-2"></i>Estadísticas
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="importar-tab" data-bs-toggle="tab" data-bs-target="#importar" type="button" role="tab">
+                    <i class="fas fa-file-excel me-2"></i>Importar Excel
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="mainTabContent">
+            <!-- Pendientes Tab -->
+            <div class="tab-pane fade show active" id="pendientes" role="tabpanel">
+                <!-- Filters -->
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-2">
+                                <label class="form-label">Estado</label>
+                                <select class="form-select" id="filterEstado">
+                                    <option value="">Todos</option>
+                                    <option value="Abierto">Abierto</option>
+                                    <option value="Cerrado">Cerrado</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Prioridad</label>
+                                <select class="form-select" id="filterPrioridad">
+                                    <option value="">Todas</option>
+                                    <option value="Alta">Alta</option>
+                                    <option value="Media">Media</option>
+                                    <option value="Baja">Baja</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Disciplina</label>
+                                <select class="form-select" id="filterDisciplina">
+                                    <option value="">Todas</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Responsable</label>
+                                <select class="form-select" id="filterResponsable">
+                                    <option value="">Todos</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Búsqueda</label>
+                                <input type="text" class="form-control" id="searchInput" placeholder="Buscar en descripción, TOP #...">
+                            </div>
+                            <div class="col-md-1 d-flex align-items-end">
+                                <button class="btn btn-outline-secondary" id="clearFilters">
+                                    <i class="fas fa-eraser"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results info -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted">
+                        Mostrando <span id="resultCount">0</span> de <span id="totalResults">0</span> pendientes
+                    </span>
+                    <button class="btn btn-success btn-sm" id="exportExcel">
+                        <i class="fas fa-file-excel me-1"></i>Exportar Excel
+                    </button>
+                </div>
+
+                <!-- Table -->
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Foto</th>
+                                <th>Semana</th>
+                                <th>TOP #</th>
+                                <th>Sistema</th>
+                                <th>Hito</th>
+                                <th>Prioridad</th>
+                                <th>Estado</th>
+                                <th>Disciplina</th>
+                                <th>Responsable</th>
+                                <th>Fecha Compromiso</th>
+                                <th>SUB/Vendor</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pendientesTableBody">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <nav>
+                    <ul class="pagination justify-content-center" id="pagination">
+                    </ul>
+                </nav>
+            </div>
+
+            <!-- Estadísticas Tab -->
+            <div class="tab-pane fade" id="estadisticas" role="tabpanel">
+                <!-- Metrics Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-3 mb-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <i class="fas fa-tasks fa-2x text-primary mb-2"></i>
+                                <h3 class="card-title" id="statTotal">0</h3>
+                                <p class="card-text">Total Pendientes</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <i class="fas fa-exclamation-triangle fa-2x text-warning mb-2"></i>
+                                <h3 class="card-title" id="statAbiertos">0</h3>
+                                <p class="card-text">Abiertos (<span id="statPorcentajeAbiertos">0%</span>)</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                                <h3 class="card-title" id="statCerrados">0</h3>
+                                <p class="card-text">Cerrados (<span id="statPorcentajeCerrados">0%</span>)</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <i class="fas fa-fire fa-2x text-danger mb-2"></i>
+                                <h3 class="card-title" id="statAltaPrioridad">0</h3>
+                                <p class="card-text">Prioridad Alta</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>Distribución por Prioridad</h5>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="prioridadChart" style="height: 250px;"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>Distribución por Disciplina</h5>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="disciplinaChart" style="height: 250px;"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Importar Excel Tab -->
+            <div class="tab-pane fade" id="importar" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-8">
+                        <!-- File upload area -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-upload me-2"></i>Importar Archivo Excel</h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="dropZone" class="border border-dashed p-5 text-center">
+                                    <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                    <h5>Arrastra tu archivo Excel aquí</h5>
+                                    <p class="text-muted">o haz clic para seleccionar archivo (.xlsx, .xls)</p>
+                                    <input type="file" id="fileInput" class="d-none" accept=".xlsx,.xls">
+                                    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                                        Seleccionar Archivo
+                                    </button>
+                                </div>
+                                
+                                <!-- Import options -->
+                                <div id="importOptions" class="mt-4" style="display: none;">
+                                    <h6>Opciones de Importación</h6>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="importMode" id="incremental" value="incremental" checked>
+                                        <label class="form-check-label" for="incremental">
+                                            Modo Incremental (agregar nuevos pendientes)
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="importMode" id="overwrite" value="overwrite">
+                                        <label class="form-check-label" for="overwrite">
+                                            Modo Sobrescritura (reemplazar todos los pendientes)
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="mt-3">
+                                        <button class="btn btn-success" id="confirmImport">
+                                            <i class="fas fa-check me-2"></i>Confirmar Importación
+                                        </button>
+                                        <button class="btn btn-secondary" id="cancelImport">
+                                            <i class="fas fa-times me-2"></i>Cancelar
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Preview table -->
+                                <div id="previewSection" class="mt-4" style="display: none;">
+                                    <h6>Vista Previa de Datos</h6>
+                                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                        <table class="table table-sm">
+                                            <thead id="previewTableHead"></thead>
+                                            <tbody id="previewTableBody"></tbody>
+                                        </table>
+                                    </div>
+                                    <p class="text-muted">Se procesarán <span id="previewCount">0</span> filas válidas.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <!-- Instructions -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h6><i class="fas fa-info-circle me-2"></i>Formato Esperado</h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="small">El archivo Excel debe contener las siguientes columnas:</p>
+                                <ul class="small">
+                                    <li>Semana</li>
+                                    <li>TOP #</li>
+                                    <li>Descripción del Sistema</li>
+                                    <li>HITO ASOCIADO</li>
+                                    <li>Disciplina</li>
+                                    <li>Responsable ACC</li>
+                                    <li>INPUT DATE</li>
+                                    <li>Fecha Compromiso Obra</li>
+                                    <li>Fecha Objetivo TOP</li>
+                                    <li>Fecha Cierre</li>
+                                    <li>SUB/Vendor</li>
+                                </ul>
+                                <div class="alert alert-warning alert-sm">
+                                    <strong>Importante:</strong> Solo se procesarán las filas que tengan un valor en la columna "TOP #".
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for editing -->
+    <div class="modal fade" id="editModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-edit me-2"></i>Editar Pendiente
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editForm">
+                        <input type="hidden" id="editId">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">TOP #</label>
+                                <input type="text" class="form-control" id="editTopNumber" readonly>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Semana</label>
+                                <input type="number" class="form-control" id="editSemana">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Descripción del Sistema</label>
+                            <textarea class="form-control" id="editDescripcionSistema" rows="2"></textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Hito Asociado</label>
+                                <input type="text" class="form-control" id="editHitoAsociado">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Disciplina</label>
+                                <select class="form-select" id="editDisciplina">
+                                    <option value="M">M</option>
+                                    <option value="I">I</option>
+                                    <option value="I&C">I&C</option>
+                                    <option value="C">C</option>
+                                    <option value="E">E</option>
+                                    <option value="S">S</option>
+                                    <option value="M + I&C">M + I&C</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Descripción de Faltas</label>
+                            <textarea class="form-control" id="editDescripcionFaltas" rows="3"></textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Responsable</label>
+                                <input type="text" class="form-control" id="editResponsable">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">SUB/Vendor</label>
+                                <input type="text" class="form-control" id="editSubvendor">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Fecha Compromiso</label>
+                                <input type="date" class="form-control" id="editFechaCompromiso">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Fecha Objetivo</label>
+                                <input type="date" class="form-control" id="editFechaObjetivo">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Fecha Cierre</label>
+                                <input type="date" class="form-control" id="editFechaCierre">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Comentarios</label>
+                            <textarea class="form-control" id="editComentarios" rows="2"></textarea>
+                        </div>
+                        
+                        <!-- Photos section -->
+                        <div class="mb-3">
+                            <label class="form-label">Fotos</label>
+                            <div id="photosSection">
+                                <div class="row" id="photoPreview"></div>
+                                <div class="border border-dashed p-3 text-center" id="photoDropZone">
+                                    <i class="fas fa-camera fa-2x text-muted mb-2"></i>
+                                    <p class="mb-2">Arrastra fotos aquí o haz clic para seleccionar</p>
+                                    <input type="file" id="photoInput" class="d-none" accept="image/*" multiple>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.getElementById('photoInput').click()">
+                                        Seleccionar Fotos
+                                    </button>
+                                    <small class="text-muted d-block mt-1">Máximo 3 fotos</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Location section -->
+                        <div class="mb-3">
+                            <label class="form-label">Ubicación</label>
+                            <div class="row">
+                                <div class="col-md-12 mb-2">
+                                    <input type="text" class="form-control" id="editUbicacionDesc" placeholder="Descripción de ubicación">
+                                </div>
+                                <div class="col-md-6">
+                                    <input type="text" class="form-control" id="editLatitud" placeholder="Latitud">
+                                </div>
+                                <div class="col-md-6">
+                                    <input type="text" class="form-control" id="editLongitud" placeholder="Longitud">
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="saveChanges">Guardar Cambios</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notifications -->
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+        <div id="liveToast" class="toast hide" role="alert">
+            <div class="toast-header">
+                <i class="fas fa-info-circle text-primary me-2"></i>
+                <strong class="me-auto">Notificación</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="toastMessage">
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
